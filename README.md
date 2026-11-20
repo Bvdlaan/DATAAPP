@@ -1,19 +1,20 @@
 # Nordic Stats Chat (DATAAPP)
 
 A minimal web chat that answers questions with **live official statistics** from
-**Statistics Sweden (SCB)**, **Statistics Norway (SSB)**, **Eurostat**, and the UK's **Nomis** and **ONS** APIs, using Mistral's
+**Statistics Sweden (SCB)**, **Statistics Norway (SSB)**, **Eurostat**, the UK's **Nomis** and **ONS** APIs, and Germany's **Destatis** (GENESIS-Online), using Mistral's
 `mistral-small-latest` through the official TypeScript SDK (`@mistralai/mistralai`).
 The model calls the statistics APIs as tools: it searches tables, reads their metadata
 to pick valid codes, then fetches the data.
 
 ```
 src/server.ts     node:http server: serves the UI, POST /api/chat, GET /api/headline
-src/chat.ts       Mistral chat with a tool-calling loop (SCB + SSB + Eurostat + Nomis + ONS tools)
+src/chat.ts       Mistral chat with a tool-calling loop (SCB + SSB + Eurostat + Nomis + ONS + Destatis tools)
 src/scb.ts        SCB PxWebApi v2 client  -> scb_search_tables, scb_get_table_metadata, scb_get_data
 src/ssb.ts        SSB PxWebApi v0 client  -> ssb_search_tables, ssb_get_table_metadata, ssb_get_data
 src/eurostat.ts   Eurostat API client     -> eurostat_search_datasets, eurostat_get_dataset_metadata, eurostat_get_data
 src/nomis.ts      Nomis API v01 client    -> nomis_search_datasets, nomis_get_dataset_metadata, nomis_get_data
-src/ons.ts        ONS beta API client     -> ons_search_datasets, ons_get_dataset_metadata, ons_get_data
+src/ons.ts        ONS beta API client     -> ons_search_timeseries, ons_get_timeseries, ons_search_datasets, ons_get_dataset_metadata, ons_get_data
+src/genesis.ts    Destatis GENESIS client -> destatis_search_tables, destatis_get_table_metadata, destatis_get_data
 src/jsonstat.ts   JSON-stat2 -> readable rows (shared by all sources)
 public/index.html Dependency-free chat UI
 ```
@@ -92,6 +93,25 @@ How missing selections are handled:
   The model uses these first for UK headline figures.
 - Rate limits (from [developer.ons.gov.uk/bots](https://developer.ons.gov.uk/bots/)): 120 requests per 10 s and 200 per minute.
   The app sends a generic User-Agent, as ONS asks.
+
+### Germany: Destatis GENESIS-Online (needs a free API token)
+
+1. Register for free at [GENESIS-Online](https://www-genesis.destatis.de), log in, and copy your token from
+   **Webservice-Schnittstelle (API)**.
+2. Add it to `.env` (never commit it): `DESTATIS_API_TOKEN=your-token`
+3. Restart `npm run dev`.
+
+Without a token the Destatis tools are switched off, and German questions are answered from Eurostat.
+
+- REST/JSON API at `https://genesis.destatis.de/genesisWS/rest/2020/`. POST only (GET was switched off on 30 June 2025).
+  The token goes in the `username` header with an empty `password`, so it never appears in URLs or logs.
+  Parameters follow the OpenAPI spec (`/genesisWS/rest/2020/GOJsonApi.json`, shown in the
+  [Swagger UI](https://genesis.destatis.de/genesisWS/swagger-ui/index.html)).
+- Tools: `find/find` to search, `metadata/table` and `catalogue/values2variable` for structure and codes, and
+  `data/tablefile` with `format=ffcsv` for data. ZIP responses are unpacked in memory.
+- A token can only read, so the queue (`job=true`) isn't available. Requests are limited to 40,000 values, which is
+  plenty for chat answers. The app fetches the last 2 years and keeps the newest 13 periods that have values.
+- © Statistisches Bundesamt (Destatis). Reuse allowed with source: "Source: Destatis, GENESIS-Online".
 
 The PxTools [installation guide](https://www.pxtools.net/PxWebApi/documentation/installation/)
 covers self-hosting PxWebApi on IIS. This app doesn't need that, because it calls the hosted APIs.

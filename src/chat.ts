@@ -5,17 +5,20 @@ import { ssbTools, runSsbTool } from "./ssb.js";
 import { eurostatTools, runEurostatTool } from "./eurostat.js";
 import { nomisTools, runNomisTool } from "./nomis.js";
 import { onsTools, runOnsTool } from "./ons.js";
+import { genesisTools, runGenesisTool, genesisEnabled } from "./genesis.js";
 
 const MODEL = "mistral-small-latest";
 const MAX_TOOL_ROUNDS = 16;
 
-const TOOLS = [...scbTools, ...ssbTools, ...eurostatTools, ...nomisTools, ...onsTools];
+// Germany (Destatis) needs a personal API token; without it, German questions go to Eurostat.
+const tools = () => [...scbTools, ...ssbTools, ...eurostatTools, ...nomisTools, ...onsTools, ...(genesisEnabled() ? genesisTools : [])];
 const RUNNERS: [string, (name: string, args: any) => Promise<unknown>][] = [
   ["scb_", runScbTool],
   ["ssb_", runSsbTool],
   ["eurostat_", runEurostatTool],
   ["nomis_", runNomisTool],
   ["ons_", runOnsTool],
+  ["destatis_", runGenesisTool],
 ];
 const runTool = (name: string, args: any) => {
   const runner = RUNNERS.find(([prefix]) => name.startsWith(prefix))?.[1];
@@ -37,6 +40,7 @@ Which source to use:
   ONS datasets (ons_search_datasets / ons_get_dataset_metadata / ons_get_data). These are updated at different speeds:
   always state the release date and say so when data is old. Index series need the % change computed; say you did.
 - Eurostat has no current UK data (only up to 2020).
+{{GERMANY}}
 - Other European countries, the EU/euro area, or comparisons across EU/EEA countries: Eurostat, because its
   definitions are harmonised so figures are comparable. Eurostat also covers Sweden and Norway (geo codes SE, NO).
 - Comparing the UK with other countries: use Nomis for the UK and Eurostat for the rest, and mention that
@@ -47,6 +51,12 @@ data is older than expected, say so. Only describe data with properties the tool
 the metadata says so). Prefer the most recent period unless asked otherwise. Always state the source, table/dataset id and period you used.
 When rows contain several periods, present them as a small markdown table.
 Answer in the user's language. Be concise.`;
+
+const GERMANY_ON = `- Germany only (incl. federal states / Länder): Destatis GENESIS-Online (tools destatis_*), the most detailed and
+  current German source; e.g. 61111-0002 consumer prices with annual rate of change. Use Eurostat to compare Germany
+  with other countries.`;
+const GERMANY_OFF = `- Germany: use Eurostat (geo DE); the Destatis connection is not configured.`;
+const systemPrompt = () => SYSTEM_PROMPT.replace("{{GERMANY}}", genesisEnabled() ? GERMANY_ON : GERMANY_OFF);
 
 export interface ChatTurn {
   role: "user" | "assistant";
@@ -84,7 +94,7 @@ function asText(content: unknown): string {
 export async function chat(history: ChatTurn[]): Promise<{ reply: string; toolsUsed: string[] }> {
   const mistral = getClient();
   const messages: Messages[] = [
-    { role: "system", content: SYSTEM_PROMPT },
+    { role: "system", content: systemPrompt() },
     ...history.map((t) => ({ role: t.role, content: t.content }) as Messages),
   ];
   const toolsUsed: string[] = [];
@@ -103,7 +113,7 @@ export async function chat(history: ChatTurn[]): Promise<{ reply: string; toolsU
     const res = await mistral.chat.complete({
       model: MODEL,
       messages,
-      tools: TOOLS,
+      tools: tools(),
       toolChoice: last ? "none" : "auto",
     });
 

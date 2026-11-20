@@ -190,6 +190,14 @@
         <path d="M32,0V64M0,32H64" stroke="#C8102E" stroke-width="12"/>
       </g>
     </symbol>
+    <symbol id="flag-de" viewBox="0 0 64 64">
+      <clipPath id="c-de"><circle cx="32" cy="32" r="32"/></clipPath>
+      <g clip-path="url(#c-de)">
+        <rect width="64" height="22" fill="#000"/>
+        <rect y="21" width="64" height="22" fill="#DD0000"/>
+        <rect y="42" width="64" height="22" fill="#FFCE00"/>
+      </g>
+    </symbol>
     <symbol id="flag-eu" viewBox="0 0 64 64">
       <circle cx="32" cy="32" r="32" fill="#003399"/>
       <path d="M0,-3.6L0.85,-1.17L3.42,-1.11L1.37,0.45L2.12,2.91L0,1.45L-2.12,2.91L-1.37,0.45L-3.42,-1.11L-0.85,-1.17Z" transform="translate(32 14)" fill="#FFCC00"/>
@@ -216,7 +224,7 @@
     </div>
     <div class="search" id="searchPill" role="button" tabindex="0">
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
-      Ask about Sweden, Norway, the EU or UK
+      Ask about Sweden, Norway, Germany, the UK or EU
     </div>
     <button class="round" id="clearBtn" title="New chat" aria-label="New chat">
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
@@ -232,6 +240,7 @@
       <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" style="margin-left:-12px"><use href="#flag-no"/></svg>
       <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" style="margin-left:-12px"><use href="#flag-eu"/></svg>
       <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" style="margin-left:-12px"><use href="#flag-uk"/></svg>
+      <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" style="margin-left:-12px"><use href="#flag-de"/></svg>
       Sources
     </button>
     <div class="dots" aria-hidden="true"><span></span><span></span><span class="on"></span></div>
@@ -289,6 +298,11 @@
       <div class="who single"><svg class="flag"><use href="#flag-uk"/></svg></div>
       <div class="body"><div class="head"><span class="title">Office for National Statistics</span><span class="time">UK · OGL</span></div>
         <div class="text">UK inflation (CPIH), GDP, retail sales, trade and more. Update speed varies by dataset.</div></div>
+    </div>
+    <div class="row">
+      <div class="who single"><svg class="flag"><use href="#flag-de"/></svg></div>
+      <div class="body"><div class="head"><span class="title">Destatis</span><span class="time">Germany · GENESIS</span></div>
+        <div class="text">German prices, jobs, population and more, incl. federal states. Needs a free API token.</div></div>
     </div>
   </div>
 </div>
@@ -362,6 +376,7 @@
     { prefix: "eurostat_", flag: "eu", name: "EU", full: "Eurostat" },
     { prefix: "nomis_", flag: "uk", name: "UK", full: "Nomis (UK)" },
     { prefix: "ons_", flag: "uk", name: "UK", full: "ONS (UK)" },
+    { prefix: "destatis_", flag: "de", name: "Germany", full: "Destatis (Germany)" },
   ];
   function whoFor(tools) {
     const hit = SOURCES.filter((s) => tools.some((t) => t.startsWith(s.prefix)));
@@ -370,7 +385,7 @@
     if (used.length === 1 && hit.length > 1) return { icon: `<div class="who single">${flag(used[0].flag)}</div>`, title: "UK (ONS + Nomis)" };
     if (used.length === 1) return { icon: `<div class="who single">${flag(used[0].flag)}</div>`, title: used[0].full };
     if (used.length === 2) return { icon: `<div class="who">${used.map((s) => flag(s.flag)).join("")}</div>`, title: used.map((s) => s.name).join(" + ") };
-    if (used.length >= 3) return { icon: `<div class="who ${used.length === 3 ? "triple" : "quad"}">${used.map((s) => flag(s.flag)).join("")}</div>`, title: used.map((s) => s.name).join(" + ") };
+    if (used.length >= 3) return { icon: `<div class="who ${used.length === 3 ? "triple" : "quad"}">${used.slice(0, 4).map((s) => flag(s.flag)).join("")}</div>`, title: used.map((s) => s.name).join(" + ") };
     return { icon: `<div class="who triple">${flag("se")}${flag("no")}${flag("eu")}</div>`, title: "Nordic Stats" };
   }
 
@@ -392,6 +407,7 @@
     nomis_search_datasets: "Nomis search", nomis_get_dataset_metadata: "Nomis dataset", nomis_get_data: "Nomis data",
     ons_search_datasets: "ONS search", ons_get_dataset_metadata: "ONS dataset", ons_get_data: "ONS data",
     ons_search_timeseries: "ONS series search", ons_get_timeseries: "ONS series",
+    destatis_search_tables: "Destatis search", destatis_get_table_metadata: "Destatis table", destatis_get_data: "Destatis data",
   };
 
   function setBusy(b) {
