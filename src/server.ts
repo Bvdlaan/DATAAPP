@@ -1,6 +1,7 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
+import { extname, resolve, sep } from "node:path";
 import { MistralError } from "@mistralai/mistralai/models/errors";
 import { chat, MissingKeyError, type ChatTurn } from "./chat.js";
 import { getData as scbData } from "./scb.js";
@@ -33,7 +34,37 @@ async function headline() {
 }
 
 const PORT = Number(process.env.PORT ?? 3000);
-const INDEX = fileURLToPath(new URL("../public/index.html", import.meta.url));
+const PUBLIC_DIR = fileURLToPath(new URL("../public/", import.meta.url));
+
+// Static files: only these types, only inside public/. Friendly paths map to pages.
+const TYPES: Record<string, string> = {
+  ".html": "text/html; charset=utf-8",
+  ".woff2": "font/woff2",
+  ".txt": "text/plain; charset=utf-8",
+  ".css": "text/css; charset=utf-8",
+  ".png": "image/png",
+  ".svg": "image/svg+xml",
+};
+const PAGES: Record<string, string> = { "/": "index.html", "/about": "about.html", "/privacy": "about.html" };
+
+async function serveStatic(urlPath: string, res: ServerResponse): Promise<boolean> {
+  const path = decodeURIComponent(urlPath.split("?")[0]);
+  const rel = PAGES[path] ?? path.replace(/^\/+/, "");
+  const ext = extname(rel).toLowerCase();
+  const file = resolve(PUBLIC_DIR, rel);
+  if (!TYPES[ext] || !file.startsWith(resolve(PUBLIC_DIR) + sep)) return false;
+  try {
+    const body = await readFile(file);
+    res.writeHead(200, {
+      "Content-Type": TYPES[ext],
+      "Cache-Control": ext === ".woff2" ? "public, max-age=31536000, immutable" : "no-cache",
+    });
+    res.end(body);
+    return true;
+  } catch {
+    return false;
+  }
+}
 const MAX_BODY = 200_000;
 
 function send(res: ServerResponse, status: number, body: unknown) {
@@ -63,11 +94,7 @@ function validHistory(x: unknown): x is ChatTurn[] {
 
 const server = createServer(async (req, res) => {
   try {
-    if (req.method === "GET" && (req.url === "/" || req.url === "/index.html")) {
-      res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
-      res.end(await readFile(INDEX));
-      return;
-    }
+    if (req.method === "GET" && req.url && !req.url.startsWith("/api/") && (await serveStatic(req.url, res))) return;
 
     if (req.method === "GET" && req.url === "/api/status") {
       return send(res, 200, { destatis: genesisEnabled() }); // only a yes/no, never the token
