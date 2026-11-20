@@ -1,4 +1,4 @@
-# Nordic Stats Chat (DATAAPP)
+# Stats Genius (DATAAPP)
 
 A minimal web chat that answers questions with **live official statistics** from
 **Statistics Sweden (SCB)**, **Statistics Norway (SSB)**, **Eurostat**, the UK's **Nomis** and **ONS** APIs, and Germany's **Destatis** (GENESIS-Online), using Mistral's

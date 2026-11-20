@@ -8,7 +8,7 @@ const DAY = 24 * 3_600_000;
 
 // ONS asks automated clients to identify themselves (https://developer.ons.gov.uk/bots/). No personal data here.
 // Limits: 120 requests / 10 s and 200 / min; 429 with Retry-After when exceeded.
-const HEADERS = { "User-Agent": "NordicStatsChat/0.1 (open data chat app)" };
+const HEADERS = { "User-Agent": "StatsGenius/0.1 (open data chat app)" };
 
 async function getJson(url: string): Promise<any> {
   const res = await fetch(url.startsWith("http") ? url : `${ROOT}${url}`, { headers: HEADERS });

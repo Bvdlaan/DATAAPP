@@ -124,7 +124,7 @@ const server = createServer(async (req, res) => {
 const HOST = process.env.HOST?.trim() || "127.0.0.1";
 
 server.listen(PORT, HOST, () => {
-  console.log(`DATAAPP running on http://${HOST === "127.0.0.1" ? "localhost" : HOST}:${PORT}`);
+  console.log(`Stats Genius running on http://${HOST === "127.0.0.1" ? "localhost" : HOST}:${PORT}`);
   const l = limitsInfo();
   console.log(`Limits: ${l.perMinute}/min and ${l.perDay}/day per user, ${l.globalPerDay}/day in total${l.trustProxy ? " (behind proxy)" : ""}`);
   if (!process.env.MISTRAL_API_KEY) console.warn("Warning: MISTRAL_API_KEY is not set (see .env.example)");
