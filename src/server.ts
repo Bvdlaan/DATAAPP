@@ -8,6 +8,7 @@ import { getData as ssbData } from "./ssb.js";
 import { prewarmNomis } from "./nomis.js";
 import { genesisEnabled } from "./genesis.js";
 import { clientId, takeChatQuota, limitsInfo } from "./limits.js";
+import { parseReport, takeReportQuota, saveReport } from "./reports.js";
 
 // Latest total population of Sweden (SCB TAB6473, monthly) and Norway (SSB 07459, yearly). Cached 1 hour.
 let headlineCache: { at: number; data: unknown } | null = null;
@@ -79,6 +80,20 @@ const server = createServer(async (req, res) => {
         console.error("headline:", err instanceof Error ? err.message : err);
         return send(res, 502, { error: "Could not load headline data" });
       }
+    }
+
+    if (req.method === "POST" && req.url === "/api/report") {
+      let body: any;
+      try {
+        body = await readJson(req);
+      } catch {
+        return send(res, 400, { error: "Invalid JSON body" });
+      }
+      const report = parseReport(body);
+      if (!report) return send(res, 400, { error: "Invalid report." });
+      if (!takeReportQuota(clientId(req))) return send(res, 429, { error: "You've sent many reports today. Thank you! Please try again tomorrow." });
+      await saveReport(report);
+      return send(res, 200, { ok: true });
     }
 
     if (req.method === "POST" && req.url === "/api/chat") {
