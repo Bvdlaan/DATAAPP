@@ -45,6 +45,11 @@
   const log = document.getElementById("log"), form = document.getElementById("f"), q = document.getElementById("q"), btn = document.getElementById("send");
   const history = [];
 
+  if (location.protocol === "file:") {
+    add("This page must be served by the app, not opened from disk. Run `npm run dev` in the project folder and open http://localhost:3000", "err");
+    btn.disabled = true;
+  }
+
   function add(text, cls, meta) {
     const el = document.createElement("div");
     el.className = "msg " + cls;
