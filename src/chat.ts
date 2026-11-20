@@ -2,18 +2,24 @@ import { Mistral } from "@mistralai/mistralai";
 import type { ChatCompletionRequestMessage as Messages } from "@mistralai/mistralai/models/components";
 import { scbTools, runScbTool } from "./scb.js";
 import { ssbTools, runSsbTool } from "./ssb.js";
+import { eurostatTools, runEurostatTool } from "./eurostat.js";
 
 const MODEL = "mistral-small-latest";
-const MAX_TOOL_ROUNDS = 8;
+const MAX_TOOL_ROUNDS = 10;
 
-const TOOLS = [...scbTools, ...ssbTools];
-const runTool = (name: string, args: any) => (name.startsWith("ssb_") ? runSsbTool(name, args) : runScbTool(name, args));
+const TOOLS = [...scbTools, ...ssbTools, ...eurostatTools];
+const runTool = (name: string, args: any) =>
+  name.startsWith("ssb_") ? runSsbTool(name, args) : name.startsWith("eurostat_") ? runEurostatTool(name, args) : runScbTool(name, args);
 
 const SYSTEM_PROMPT = `You are a helpful assistant with live access to official open data from
-Statistics Sweden (SCB, tools scb_*) and Statistics Norway (SSB, tools ssb_*).
-Use SCB for Sweden and SSB for Norway; for comparisons, query both.
-Workflow: search tables, inspect metadata to choose valid codes, then fetch data.
-Prefer the most recent period unless asked otherwise. Always state the source, table id and period you used.
+Statistics Sweden (SCB, tools scb_*), Statistics Norway (SSB, tools ssb_*) and Eurostat (tools eurostat_*).
+Which source to use:
+- Sweden only: SCB (most detailed, often more recent). Norway only: SSB.
+- Other European countries, the EU/euro area, or comparisons across countries: Eurostat, because its definitions
+  are harmonised so figures are comparable. Eurostat also covers Sweden and Norway (geo codes SE, NO).
+Workflow: search, inspect metadata to choose valid codes, then fetch data.
+Prefer the most recent period unless asked otherwise. Always state the source, table/dataset id and period you used.
+When rows contain several periods, present them as a small markdown table.
 Answer in the user's language. Be concise.`;
 
 export interface ChatTurn {

@@ -10,10 +10,21 @@ export function flattenJsonStat(ds: any, maxRows = 200) {
       .map((code) => c.label?.[code] ?? code);
   });
   const names = ids.map((id) => ds.dimension[id].label ?? id);
-  const values: (number | null)[] = Array.isArray(ds.value) ? ds.value : Object.values(ds.value ?? {});
+  // JSON-stat allows a dense array or a sparse { "index": value } object (Eurostat uses the latter).
+  const total = sizes.reduce((a, b) => a * b, 1);
+  let values: (number | null)[];
+  if (Array.isArray(ds.value)) values = ds.value;
+  else {
+    values = new Array(total).fill(null);
+    for (const [k, v] of Object.entries(ds.value ?? {})) values[Number(k)] = v as number;
+  }
 
   const rows: Record<string, string | number | null>[] = [];
-  for (let i = 0; i < values.length && rows.length < maxRows; i++) {
+  let nonNull = 0;
+  for (let i = 0; i < values.length; i++) {
+    if (values[i] === null || values[i] === undefined) continue; // skip empty cells
+    nonNull++;
+    if (rows.length >= maxRows) continue;
     // Row-major order: last dimension varies fastest.
     const pos: number[] = new Array(ids.length);
     let rem = i;
@@ -30,8 +41,8 @@ export function flattenJsonStat(ds: any, maxRows = 200) {
     label: ds.label,
     updated: ds.updated,
     source: ds.source,
-    totalCells: values.length,
-    truncated: values.length > rows.length,
+    totalCells: nonNull,
+    truncated: nonNull > rows.length,
     rows,
   };
 }
