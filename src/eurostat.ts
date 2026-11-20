@@ -51,19 +51,47 @@ export async function searchDatasets(query: string, limit = 12) {
       const hay = `${e.title} ${e.code}`.toLowerCase();
       const hits = words.filter((w) => hay.includes(w)).length;
       if (hits < need) return null;
+      const current = isCurrent(e);
       // More matching words first; then exact code hits, current data, main datasets, shorter titles.
       const score =
         hits * 20 +
         (words.includes(e.code.toLowerCase()) ? 100 : 0) +
-        (e.end >= "2025" ? 8 : 0) +
+        (current ? 25 : -40) +
         (/vtg|vintage/i.test(e.code + e.title) ? -10 : 0) -
         e.title.length / 20;
-      return { e, score };
+      return { e, score, current };
     })
-    .filter((x): x is { e: TocEntry; score: number } => !!x)
+    .filter((x): x is { e: TocEntry; score: number; current: boolean } => !!x)
     .sort((a, b) => b.score - a.score)
     .slice(0, limit)
-    .map(({ e }) => ({ code: e.code, title: e.title, type: e.type, dataStart: e.start, dataEnd: e.end, updated: e.updated }));
+    .map(({ e, current }) => ({
+      code: e.code,
+      title: e.title,
+      type: e.type,
+      dataStart: e.start,
+      dataEnd: e.end,
+      updated: e.updated,
+      ...(current ? {} : { note: "Not updated any more (historical/discontinued). Prefer a current dataset." }),
+    }));
+}
+
+/**
+ * Is this dataset still being updated? Eurostat freezes replaced datasets and gives them a closed year range in the
+ * title, e.g. "HICP - monthly data (annual rate of change) (1997-2025)". Monthly/quarterly data should also be recent.
+ */
+function isCurrent(e: TocEntry, now = new Date()): boolean {
+  const year = now.getFullYear();
+  const closed = e.title.match(/\((\d{4})\s*-\s*(\d{4})\)\s*$/);
+  if (closed && Number(closed[2]) < year) return false;
+  const m = e.end.match(/^(\d{4})(?:-(\d{2})|-?Q(\d))?/);
+  if (!m) return true;
+  const endYear = Number(m[1]);
+  if (m[2] || m[3]) {
+    const endMonth = m[2] ? Number(m[2]) : Number(m[3]) * 3;
+    const monthsOld = (year - endYear) * 12 + (now.getMonth() + 1 - endMonth);
+    return monthsOld <= 9;
+  }
+  return endYear >= year - 2; // annual data lags; 2 years back is still current
 }
 
 // ---------- structure (dimensions + codes actually used by the dataset) ----------
@@ -192,7 +220,9 @@ export const eurostatTools = [
       description:
         "Search Eurostat (EU statistics, all EU/EEA countries incl. Sweden and Norway) datasets by English keywords. " +
         "All words must match the title. Returns dataset codes, e.g. 'une_rt_m' (unemployment, monthly), " +
-        "'prc_hicp_manr' (HICP inflation), 'demo_pjan' (population), 'nama_10_gdp' (GDP).",
+        "'demo_pjan' (population), 'nama_10_gdp' (GDP). Inflation (HICP, current): 'prc_hicp_minr' with unit RCH_A " +
+        "(annual rate) and coicop18 TOTAL; the older prc_hicp_manr/aind stop at 2025. Results marked 'Not updated any " +
+        "more' are frozen: prefer current datasets.",
       parameters: {
         type: "object",
         properties: { query: { type: "string", description: "Keywords, e.g. 'unemployment rate monthly'." } },

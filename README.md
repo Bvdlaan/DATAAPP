@@ -1,18 +1,19 @@
 # Nordic Stats Chat (DATAAPP)
 
 A minimal web chat that answers questions with **live official statistics** from
-**Statistics Sweden (SCB)**, **Statistics Norway (SSB)**, **Eurostat** and **Nomis** (UK, ONS), using Mistral's
+**Statistics Sweden (SCB)**, **Statistics Norway (SSB)**, **Eurostat**, and the UK's **Nomis** and **ONS** APIs, using Mistral's
 `mistral-small-latest` through the official TypeScript SDK (`@mistralai/mistralai`).
 The model calls the statistics APIs as tools: it searches tables, reads their metadata
 to pick valid codes, then fetches the data.
 
 ```
 src/server.ts     node:http server: serves the UI, POST /api/chat, GET /api/headline
-src/chat.ts       Mistral chat with a tool-calling loop (SCB + SSB + Eurostat + Nomis tools)
+src/chat.ts       Mistral chat with a tool-calling loop (SCB + SSB + Eurostat + Nomis + ONS tools)
 src/scb.ts        SCB PxWebApi v2 client  -> scb_search_tables, scb_get_table_metadata, scb_get_data
 src/ssb.ts        SSB PxWebApi v0 client  -> ssb_search_tables, ssb_get_table_metadata, ssb_get_data
 src/eurostat.ts   Eurostat API client     -> eurostat_search_datasets, eurostat_get_dataset_metadata, eurostat_get_data
 src/nomis.ts      Nomis API v01 client    -> nomis_search_datasets, nomis_get_dataset_metadata, nomis_get_data
+src/ons.ts        ONS beta API client     -> ons_search_datasets, ons_get_dataset_metadata, ons_get_data
 src/jsonstat.ts   JSON-stat2 -> readable rows (shared by all sources)
 public/index.html Dependency-free chat UI
 ```
@@ -55,9 +56,10 @@ Example questions:
 | Limits | 30 calls / 10 s per IP, 150,000 cells per request | ~30 queries / min, 800,000 cells per request | Very large queries are processed asynchronously, so keep filters tight | 25,000 cells per request (more with optional `NOMIS_UID`) |
 | Key | none | none | none | none (optional `NOMIS_UID`) |
 
-Base URLs can be overridden with `SCB_API_BASE` / `SSB_API_BASE` / `EUROSTAT_API_BASE` / `NOMIS_API_BASE` in `.env`.
+Base URLs can be overridden with `SCB_API_BASE` / `SSB_API_BASE` / `EUROSTAT_API_BASE` / `NOMIS_API_BASE` / `ONS_API_BASE` in `.env`.
 
-Which source the model uses: SCB for Sweden only, SSB for Norway only, Nomis for the UK (Eurostat has no current UK data),
+Which source the model uses: SCB for Sweden only, SSB for Norway only, Nomis for UK jobs, population and Census, ONS for UK prices, GDP
+and other economic data (Eurostat has no current UK data),
 and Eurostat for other European countries, the EU or euro area, and cross-country comparisons, because Eurostat's figures are harmonised.
 
 How missing selections are handled:
@@ -66,10 +68,30 @@ How missing selections are handled:
 - **Eurostat:** time defaults to the latest period. If that period has no values for the selection yet (countries
   publish at different times), the app looks back 6 periods instead. Search runs on the catalogue
   (table of contents), which is downloaded once and kept for 24 hours. Dataset structures are also kept for 24 hours.
+  Eurostat freezes replaced datasets: their titles end in a closed range such as `(1997-2025)`, or their data stops early.
+  Search ranks those last and marks them "Not updated any more". In 2026 inflation (HICP) moved to ECOICOP 2:
+  use `prc_hicp_minr` (`unit=RCH_A`, `coicop18=TOTAL`), because `prc_hicp_manr` and `prc_hicp_aind` stop at 2025.
 - **Nomis:** geography defaults to the UK (`K02000001`), time to `latest`, and other dimensions left out use Nomis's
   `default` code (usually the total). GSS codes such as `E08000003` (Manchester) work. A geography search lists
   councils and regions before small statistical areas. The dataset list (about 1,600 datasets) starts downloading when the
   server starts and is kept for 24 hours.
+
+### UK Office for National Statistics (ONS) API
+
+- Base URL `https://api.beta.ons.gov.uk/v1`, open, no key. Crown Copyright, Open Government Licence ("Source: Office for National Statistics").
+- About 340 datasets, for example `cpih01` (CPIH), `gdp-to-four-decimal-places` (monthly GDP), `retail-sales-index`, `weekly-deaths-region`.
+- **Freshness varies a lot by dataset.** In November 2026, monthly GDP ran to June 2026, CPIH and retail sales stopped at
+  January 2026, and some datasets haven't been updated since 2022–2024. Every answer states the dataset's release date.
+- The API takes one code per dimension and allows `*` on one dimension. The app makes time the wildcard and returns
+  the latest 13 periods, so a year-on-year change can be worked out. Dimensions left out default to the UK or total.
+  Several codes for one dimension are sent as separate requests (12 at most).
+- CPIH comes as an index. The model works out the annual inflation rate itself and says that it did.
+- **Headline time series (CDIDs) are current.** Tools `ons_search_timeseries` and `ons_get_timeseries` use the search API
+  (`/v1/search?content_type=timeseries`) and the series data on `www.ons.gov.uk/{uri}/data`. Examples: `L55O` (CPIH annual
+  rate, October 2026 = 3.7%, released 18 November 2026), `D7G7` (CPI annual rate), `MGSX` (unemployment rate), `IHYQ` (GDP growth).
+  The model uses these first for UK headline figures.
+- Rate limits (from [developer.ons.gov.uk/bots](https://developer.ons.gov.uk/bots/)): 120 requests per 10 s and 200 per minute.
+  The app sends a generic User-Agent, as ONS asks.
 
 The PxTools [installation guide](https://www.pxtools.net/PxWebApi/documentation/installation/)
 covers self-hosting PxWebApi on IIS. This app doesn't need that, because it calls the hosted APIs.
