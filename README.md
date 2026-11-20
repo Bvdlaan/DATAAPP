@@ -108,7 +108,12 @@ Without a token the Destatis tools are switched off, and German questions are an
   Parameters follow the OpenAPI spec (`/genesisWS/rest/2020/GOJsonApi.json`, shown in the
   [Swagger UI](https://genesis.destatis.de/genesisWS/swagger-ui/index.html)).
 - Tools: `find/find` to search, `metadata/table` and `catalogue/values2variable` for structure and codes, and
-  `data/tablefile` with `format=ffcsv` for data. ZIP responses are unpacked in memory.
+  `data/tablefile` for data. ZIP responses are unpacked in memory.
+- Data comes as `datencsv` (the table layout), not the flat `ffcsv`. In `ffcsv` the measure names are cut short: in table
+  61111-0002, "change on previous month" and "change on previous year's month" are both labelled just "in".
+  `datencsv` keeps full measure names, units and the table's footnotes. Each result also includes `latest`: the newest value
+  and period for each series.
+- Table metadata has an "Updated" date, but it's when the table's structure last changed, not a data release date.
 - A token can only read, so the queue (`job=true`) isn't available. Requests are limited to 40,000 values, which is
   plenty for chat answers. The app fetches the last 2 years and keeps the newest 13 periods that have values.
 - © Statistisches Bundesamt (Destatis). Reuse allowed with source: "Source: Destatis, GENESIS-Online".

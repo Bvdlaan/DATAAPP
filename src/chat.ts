@@ -53,8 +53,12 @@ When rows contain several periods, present them as a small markdown table.
 Answer in the user's language. Be concise.`;
 
 const GERMANY_ON = `- Germany only (incl. federal states / Länder): Destatis GENESIS-Online (tools destatis_*), the most detailed and
-  current German source; e.g. 61111-0002 consumer prices with annual rate of change. Use Eurostat to compare Germany
-  with other countries.`;
+  current German source. Use Eurostat to compare Germany with other countries.
+  Known Destatis tables (use directly, no search needed): German inflation = 61111-0002 (measure "Change on previous
+  year's month" is the inflation rate; national CPI); inflation per federal state = 61111-0011 with regionalvariable
+  DLAND; registered unemployment = 13211-0002; population = 12411-0001. destatis_get_data returns "latest" with the
+  newest value and period per series: report those periods exactly. Destatis tables have no release date field, so
+  don't state one. 61111-0002 is the national CPI (VPI), not the HICP.`;
 const GERMANY_OFF = `- Germany: use Eurostat (geo DE); the Destatis connection is not configured.`;
 const systemPrompt = () => SYSTEM_PROMPT.replace("{{GERMANY}}", genesisEnabled() ? GERMANY_ON : GERMANY_OFF);
 

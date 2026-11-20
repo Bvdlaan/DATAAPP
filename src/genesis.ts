@@ -101,7 +101,8 @@ export async function getTableMetadata(table: string, opts: { variable?: string;
     code: o.Code ?? table,
     title: o.Content,
     time: o.Time,
-    updated: o.Updated,
+    // "Updated" is when the table's structure last changed, not when data was added: never report it as a release date.
+    structureChanged: o.Updated,
     structure: {
       head: vars(o.Structure?.Head),
       columns: vars(o.Structure?.Columns),
@@ -119,22 +120,90 @@ export async function getTableMetadata(table: string, opts: { variable?: string;
 
 const MISSING = new Set(["...", ".", "-", "/", "x", ""]);
 
-function parseCsv(text: string): Record<string, string>[] {
-  const lines = text.replace(/^﻿/, "").split(/\r?\n/).filter((l) => l.trim());
-  if (!lines.length) return [];
-  const split = (l: string) => l.split(";").map((c) => c.replace(/^"|"$/g, "").trim());
-  const head = split(lines[0]);
-  return lines.slice(1).map((l) => Object.fromEntries(split(l).map((c, i) => [head[i], c])));
+const MONTHS = "january february march april may june july august september october november december".split(" ");
+
+/** Sortable time key from row labels like ["2026", "October"], ["2026", "2nd quarter"] or ["2025"]. */
+function timeKey(labels: string[]): string | null {
+  // Reference dates such as "2025-12-31" or "31.12.2025".
+  for (const l of labels) {
+    const iso = l.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (iso) return `${iso[1]}-${iso[2]}-${iso[3]}`;
+    const de = l.match(/^(\d{2})\.(\d{2})\.(\d{4})$/);
+    if (de) return `${de[3]}-${de[2]}-${de[1]}`;
+  }
+  const year = labels.find((l) => /^\d{4}$/.test(l));
+  if (!year) return null;
+  const lower = labels.map((l) => l.toLowerCase());
+  const month = lower.findIndex((l) => MONTHS.includes(l));
+  if (month >= 0) return `${year}-${String(MONTHS.indexOf(lower[month]) + 1).padStart(2, "0")}`;
+  const q = lower.map((l) => l.match(/^([1-4])(?:st|nd|rd|th) quarter$/)?.[1]).find(Boolean);
+  if (q) return `${year}-Q${q}`;
+  return `${year}`;
 }
 
-const MONTHS = "january february march april may june july august september october november december".split(" ");
-function timeKey(r: Record<string, string>) {
-  const year = r.time ?? "";
-  const sub = (r["2_variable_attribute_code"] || r["1_variable_attribute_code"] || "").toLowerCase();
-  const label = (r["2_variable_attribute_label"] || "").toLowerCase();
-  const m = sub.match(/^monat(\d{2})$/) ?? (MONTHS.includes(label) ? [, String(MONTHS.indexOf(label) + 1).padStart(2, "0")] : null);
-  const q = sub.match(/^quart(\d)$/);
-  return `${year}-${m ? m[1] : q ? "Q" + q[1] : "00"}`;
+function toNumber(raw: string): { value: number | null; flag?: string } {
+  const v = raw.trim();
+  if (MISSING.has(v)) return { value: null };
+  // English output: "+2.1", "-0.3", "83,577,140", sometimes with a trailing quality flag letter ("1.9 p").
+  const m = v.replace(/\s/g, "").match(/^([+-]?[\d,]*\.?\d+)([a-z]*)$/i);
+  if (!m) return { value: null };
+  const n = Number(m[1].replace(/,/g, ""));
+  return Number.isFinite(n) ? { value: n, ...(m[2] ? { flag: m[2] } : {}) } : { value: null };
+}
+
+/**
+ * Parse GENESIS "datencsv" (the table layout): title lines, header line(s) whose first k cells are empty
+ * (k = number of row-label columns) naming the measures, then data lines, then "__________" and footnotes.
+ * The flat "ffcsv" format was not used because it truncates measure names (e.g. two different rates both called "in").
+ */
+function parseDatencsv(text: string) {
+  const lines = text.replace(/^\uFEFF/, "").split(/\r\n|\n|\r/);
+  const cells = (l: string) => l.split(";").map((c) => c.replace(/^"|"$/g, "").trim());
+  const title = cells(lines[1] ?? "")[0] ?? "";
+  const endIdx = lines.findIndex((l) => /^_{5,}/.test(l));
+  const body = lines.slice(0, endIdx < 0 ? undefined : endIdx);
+  const notes = endIdx < 0 ? "" : lines.slice(endIdx + 1).filter((l) => l.trim() && !/^©|^created:/i.test(l)).join(" ").replace(/"/g, "").trim();
+
+  // Header lines start with one or more empty cells; data lines start with a label.
+  const firstHeader = body.findIndex((l, i) => i > 0 && /^;/.test(l) && cells(l).some((c) => c));
+  type Parsed = { key: string | null; row: Record<string, string | number | null> };
+  if (firstHeader < 0) return { title, context: "", notes, rows: [] as Parsed[] };
+  // Lines between the title and the header describe the selection, e.g. "Consumer price index (2020=100)".
+  const context = body
+    .slice(2, firstHeader)
+    .map((l) => cells(l)[0])
+    .filter(Boolean)
+    .join(" · ");
+  let k = 0;
+  const h0 = cells(body[firstHeader]);
+  while (k < h0.length && h0[k] === "") k++;
+  let firstData = firstHeader;
+  while (firstData < body.length && /^;/.test(body[firstData])) firstData++;
+  const headers = body.slice(firstHeader, firstData).map(cells);
+  // The last header line usually holds units (e.g. "2020=100", "in (%)"), the others the measure names.
+  const unitLine = headers.length > 1 ? headers[headers.length - 1] : [];
+  const nameLines = headers.length > 1 ? headers.slice(0, -1) : headers;
+  const width = Math.max(...headers.map((h) => h.length));
+  const colName = (j: number) => nameLines.map((h) => h[j]).filter(Boolean).join(" · ");
+
+  const rows: { key: string | null; row: Record<string, string | number | null> }[] = [];
+  const carry: string[] = [];
+  for (const line of body.slice(firstData)) {
+    if (!line.trim()) continue;
+    const c = cells(line);
+    for (let i = 0; i < k; i++) if (c[i]) carry[i] = c[i]; // empty label cell = same as the line above
+    const labels = carry.slice(0, k).filter(Boolean);
+    const key = timeKey(labels);
+    for (let j = k; j < width; j++) {
+      const { value, flag } = toNumber(c[j] ?? "");
+      if (value === null) continue;
+      rows.push({
+        key,
+        row: { row: labels.join(" "), measure: colName(j), unit: unitLine[j] || null, value, ...(flag ? { flag } : {}) },
+      });
+    }
+  }
+  return { title, context, notes, rows };
 }
 
 export interface GenesisFilter {
@@ -158,7 +227,7 @@ export async function getData(
   const year = new Date().getFullYear();
   const data: Record<string, string> = {
     name: table,
-    format: "ffcsv",
+    format: "datencsv",
     compress: "false",
   };
   if (opts.timeslices) data.timeslices = String(opts.timeslices);
@@ -185,37 +254,34 @@ export async function getData(
     csv = text;
   }
 
-  const raw = parseCsv(csv);
-  const rows = raw.map((r) => {
-    const out: Record<string, string | number | null> = { period: [r.time, r["2_variable_attribute_label"] && /time|monat|quart/i.test(r["2_variable_code"] ?? "") ? r["2_variable_attribute_label"] : ""].filter(Boolean).join(" ") || r.time };
-    for (const [k, v] of Object.entries(r)) {
-      if (/^\d+_variable_attribute_label$/.test(k) && v) {
-        const n = k.split("_")[0];
-        const varCode = r[`${n}_variable_code`] ?? "";
-        if (/^(MONAT|QUART)/i.test(varCode) || /^(MONAT|QUART)/i.test(r[`${n}_variable_attribute_code`] ?? "")) continue;
-        out[r[`${n}_variable_label`] || varCode || k] = v;
-      }
-    }
-    out.measure = r.value_variable_label ?? null;
-    const v = (r.value ?? "").trim();
-    out.value = MISSING.has(v) ? null : Number(v.replace(/\s/g, "").replace(",", "."));
-    out.unit = r.value_unit ?? null;
-    return { key: timeKey(r), row: out };
-  });
-
-  // Keep the most recent `periods` time points (default 13: enough for a year-on-year change).
-  // Drop empty cells first, so not-yet-published periods ("...") don't use up the window.
-  const filled = rows.filter((r) => r.row.value !== null);
-  const keys = [...new Set(filled.map((r) => r.key))].sort();
+  const parsed = parseDatencsv(csv);
+  // Keep the newest `periods` time points (default 13: enough for a year-on-year change). Rows without values
+  // (not yet published, "...") are already dropped, so they don't use up the window.
+  const keys = [...new Set(parsed.rows.map((r) => r.key).filter((k): k is string => !!k))].sort();
   const keep = new Set(keys.slice(-Math.max(1, Math.min(opts.periods ?? 13, 60))));
-  const latest = filled.filter((r) => keep.has(r.key)).sort((a, b) => a.key.localeCompare(b.key)).map((r) => r.row);
+  const kept = parsed.rows.filter((r) => !r.key || keep.has(r.key));
+  const latest = kept.map((r) => r.row);
+
+  // Newest value per series (row labels without the time part + measure), so the model doesn't have to find it.
+  const newest = new Map<string, { key: string; row: Record<string, string | number | null> }>();
+  for (const r of kept) {
+    if (!r.key) continue;
+    const series = `${String(r.row.row).replace(/\b\d{4}\b|\b\d{4}-\d{2}-\d{2}\b|\b(january|february|march|april|may|june|july|august|september|october|november|december)\b|\b[1-4](st|nd|rd|th) quarter\b/gi, "").trim()}|${r.row.measure}`;
+    const prev = newest.get(series);
+    if (!prev || r.key > prev.key) newest.set(series, { key: r.key, row: r.row });
+  }
+  const latestValues = [...newest.values()].map(({ row }) => ({ period: row.row, measure: row.measure, unit: row.unit, value: row.value }));
+
   return {
     table,
+    title: parsed.title,
+    latest: latestValues.slice(0, 30),
+    ...(parsed.context ? { context: parsed.context } : {}),
     source: "Destatis, GENESIS-Online",
-    statistic: raw[0]?.statistics_label,
     totalRows: latest.length,
     truncated: latest.length > 250,
     rows: latest.slice(-250),
+    ...(parsed.notes ? { notes: parsed.notes.slice(0, 600) } : {}),
   };
 }
 
