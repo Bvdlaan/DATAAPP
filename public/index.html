@@ -263,7 +263,7 @@
   <div class="card" id="chatCard">
     <div class="card-title">Conversation</div>
     <div id="log">
-      <div class="empty" id="empty">Ask a question below, or tap one of the buttons above. Answers come from Statistics Sweden (SCB), Statistics Norway (SSB), Eurostat, and the UK's Nomis and ONS.</div>
+      <div class="empty" id="empty">Ask any question about statistics for Germany, the UK, the eurozone, Norway and Sweden, or tap a button above to get started.</div>
     </div>
   </div>
 
@@ -474,7 +474,7 @@
   new MutationObserver(() => { $("clearBtn").hidden = !log.querySelector(".row"); }).observe(log, { childList: true });
   $("clearBtn").addEventListener("click", () => {
     history.length = 0;
-    log.innerHTML = `<div class="empty" id="empty">New conversation. Ask anything about Swedish, Norwegian, German, UK or EU statistics.</div>`;
+    log.innerHTML = `<div class="empty" id="empty">New conversation. Ask any question about statistics for Germany, the UK, the eurozone, Norway and Sweden.</div>`;
     window.scrollTo({ top: 0, behavior: "smooth" });
     q.focus();
   });
