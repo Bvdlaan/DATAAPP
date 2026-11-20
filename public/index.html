@@ -302,7 +302,7 @@
     <div class="row">
       <div class="who single"><svg class="flag"><use href="#flag-de"/></svg></div>
       <div class="body"><div class="head"><span class="title">Destatis</span><span class="time">Germany · GENESIS</span></div>
-        <div class="text">German prices, jobs, population and more, incl. federal states. Needs a free API token.</div></div>
+        <div class="text">German prices, jobs, population and more, incl. federal states. <span id="destatisStatus"></span></div></div>
     </div>
   </div>
 </div>
@@ -458,6 +458,15 @@
     }
   }
   if (location.protocol !== "file:") loadHeadline();
+
+  // Which optional sources the server has configured (the token itself never leaves the server).
+  async function loadStatus() {
+    try {
+      const s = await (await fetch("/api/status")).json();
+      $("destatisStatus").textContent = s.destatis ? "✓ Connected" : "Not connected: German questions use Eurostat.";
+    } catch { /* leave the card text as is */ }
+  }
+  if (location.protocol !== "file:") loadStatus();
 
   // ---------- events ----------
   const autosize = () => { q.style.height = "auto"; q.style.height = Math.min(q.scrollHeight, 140) + "px"; };

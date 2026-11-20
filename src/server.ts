@@ -6,6 +6,7 @@ import { chat, MissingKeyError, type ChatTurn } from "./chat.js";
 import { getData as scbData } from "./scb.js";
 import { getData as ssbData } from "./ssb.js";
 import { prewarmNomis } from "./nomis.js";
+import { genesisEnabled } from "./genesis.js";
 
 // Latest total population of Sweden (SCB TAB6473, monthly) and Norway (SSB 07459, yearly). Cached 1 hour.
 let headlineCache: { at: number; data: unknown } | null = null;
@@ -64,6 +65,10 @@ const server = createServer(async (req, res) => {
       res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
       res.end(await readFile(INDEX));
       return;
+    }
+
+    if (req.method === "GET" && req.url === "/api/status") {
+      return send(res, 200, { destatis: genesisEnabled() }); // only a yes/no, never the token
     }
 
     if (req.method === "GET" && req.url === "/api/headline") {
