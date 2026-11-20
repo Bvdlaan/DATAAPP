@@ -37,24 +37,23 @@
       position: absolute; inset: 0 0 auto 0; height: 760px; z-index: -1;
       background: linear-gradient(180deg, #6f8dff 0%, #3b55ff 18%, #1029f0 34%, #0a1bb5 48%, #06104f 66%, var(--navy) 100%);
     }
-    .app { max-width: 560px; margin: 0 auto; padding: 16px 16px 120px; }
+    /* Leaves room for the iPhone notch / Android status bar when running as an app. */
+    .app { max-width: 560px; margin: 0 auto; padding: calc(12px + env(safe-area-inset-top)) 16px 120px; }
 
-    /* Top bar */
-    .top { display: flex; align-items: center; gap: 10px; }
-    .avatar { position: relative; width: 44px; height: 44px; flex: none; }
-    .avatar .flag { position: absolute; width: 30px; height: 30px; }
-    .avatar .flag:first-child { top: 0; left: 0; }
-    .avatar .flag:last-child { bottom: 0; right: 0; }
-    .search {
-      flex: 1; display: flex; align-items: center; gap: 10px; height: 44px; padding: 0 16px;
-      border-radius: 999px; background: var(--pill); color: rgba(255,255,255,.85); font-size: 16px;
-      backdrop-filter: blur(12px);
+    /* Top bar: app name left, "New chat" right (only once there is a conversation) */
+    .top { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 44px; }
+    .brand { display: flex; align-items: center; gap: 10px; font-size: 19px; font-weight: 700; letter-spacing: -0.01em; }
+    .brand .mark {
+      width: 36px; height: 36px; border-radius: 11px; display: grid; place-items: center;
+      background: rgba(255,255,255,.22); backdrop-filter: blur(12px);
     }
-    .round {
-      width: 44px; height: 44px; flex: none; border-radius: 50%; border: 0; background: var(--pill);
-      color: #fff; display: grid; place-items: center; cursor: pointer; backdrop-filter: blur(12px);
+    .newchat {
+      display: inline-flex; align-items: center; gap: 6px; height: 40px; padding: 0 16px; border: 0; border-radius: 999px;
+      background: var(--pill); color: #fff; font: 600 15px/1 "Inter", system-ui, sans-serif; cursor: pointer; backdrop-filter: blur(12px);
     }
-    .round:hover { background: rgba(255,255,255,.3); }
+    .newchat:hover { background: rgba(255,255,255,.3); }
+    .newchat[hidden] { display: none; }
+    button:focus-visible, .chip:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
 
     /* Hero */
     .hero { text-align: center; padding: 64px 0 40px; }
@@ -66,9 +65,6 @@
       display: inline-flex; align-items: center; gap: 8px; margin-top: 18px; padding: 10px 22px;
       border-radius: 999px; background: rgba(255,255,255,.22); font-weight: 600; font-size: 16px; border: 0; color: #fff; cursor: pointer;
     }
-    .dots { display: flex; justify-content: center; gap: 7px; margin-top: 34px; }
-    .dots span { width: 6px; height: 6px; border-radius: 50%; background: rgba(255,255,255,.45); }
-    .dots span.on { background: #fff; }
 
     /* Actions */
     .actions { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 26px 0 22px; }
@@ -146,6 +142,7 @@
     }
     .dock textarea::-webkit-scrollbar { display: none; }
     .dock textarea::placeholder { color: var(--muted); }
+    .dock textarea:focus-visible { box-shadow: 0 0 0 2px var(--accent); }
     .send { width: 48px; height: 48px; border-radius: 50%; border: 0; background: var(--accent); color: #fff; display: grid; place-items: center; cursor: pointer; flex: none; }
     .send:disabled { opacity: .45; cursor: default; }
 
@@ -217,19 +214,18 @@
 </svg>
 
 <div class="app">
-  <div class="top">
-    <div class="avatar" aria-hidden="true">
-      <svg class="flag"><use href="#flag-se"/></svg>
-      <svg class="flag"><use href="#flag-no"/></svg>
+  <header class="top">
+    <div class="brand">
+      <span class="mark" aria-hidden="true">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round"><path d="M5 19v-6M10 19V9M15 19v-4M20 19V5"/></svg>
+      </span>
+      Nordic Stats
     </div>
-    <div class="search" id="searchPill" role="button" tabindex="0">
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
-      Ask about Sweden, Norway, Germany, the UK or EU
-    </div>
-    <button class="round" id="clearBtn" title="New chat" aria-label="New chat">
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+    <button class="newchat" id="clearBtn" hidden>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+      New chat
     </button>
-  </div>
+  </header>
 
   <section class="hero">
     <div class="eyebrow">Population · Sweden + Norway</div>
@@ -243,7 +239,6 @@
       <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" style="margin-left:-12px"><use href="#flag-de"/></svg>
       Sources
     </button>
-    <div class="dots" aria-hidden="true"><span></span><span></span><span class="on"></span></div>
   </section>
 
   <div class="actions">
@@ -273,7 +268,7 @@
   </div>
 
   <div class="card">
-    <div class="card-title">About the data ›</div>
+    <div class="card-title">About the data</div>
     <div class="row">
       <div class="who single"><svg class="flag"><use href="#flag-se"/></svg></div>
       <div class="body"><div class="head"><span class="title">Statistics Sweden</span><span class="time">SCB · CC0</span></div>
@@ -474,12 +469,13 @@
   form.addEventListener("submit", (e) => { e.preventDefault(); const t = q.value.trim(); if (!t || sendBtn.disabled) return; q.value = ""; autosize(); ask(t); });
   q.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); form.requestSubmit(); } });
   document.querySelectorAll(".action").forEach((b) => b.addEventListener("click", () => ask(b.dataset.q)));
-  $("searchPill").addEventListener("click", () => q.focus());
-  $("searchPill").addEventListener("keydown", (e) => { if (e.key === "Enter") q.focus(); });
   $("sourcesChip").addEventListener("click", () => document.querySelector(".card:last-of-type").scrollIntoView({ behavior: "smooth" }));
+  // "New chat" only appears once there is something to clear.
+  new MutationObserver(() => { $("clearBtn").hidden = !log.querySelector(".row"); }).observe(log, { childList: true });
   $("clearBtn").addEventListener("click", () => {
     history.length = 0;
-    log.innerHTML = `<div class="empty" id="empty">New conversation. Ask anything about Swedish, Norwegian, European or UK statistics.</div>`;
+    log.innerHTML = `<div class="empty" id="empty">New conversation. Ask anything about Swedish, Norwegian, German, UK or EU statistics.</div>`;
+    window.scrollTo({ top: 0, behavior: "smooth" });
     q.focus();
   });
 </script>

@@ -7,6 +7,7 @@ import { getData as scbData } from "./scb.js";
 import { getData as ssbData } from "./ssb.js";
 import { prewarmNomis } from "./nomis.js";
 import { genesisEnabled } from "./genesis.js";
+import { clientId, takeChatQuota, limitsInfo } from "./limits.js";
 
 // Latest total population of Sweden (SCB TAB6473, monthly) and Norway (SSB 07459, yearly). Cached 1 hour.
 let headlineCache: { at: number; data: unknown } | null = null;
@@ -89,13 +90,24 @@ const server = createServer(async (req, res) => {
       }
       if (!validHistory(body?.messages)) return send(res, 400, { error: "Expected { messages: [{ role, content }] }" });
 
+      // Usage limits: per user per minute/day, plus a global daily cap that protects the Mistral bill.
+      const quota = takeChatQuota(clientId(req));
+      if (!quota.ok) {
+        res.setHeader("Retry-After", String(quota.retryAfterSec));
+        return send(res, 429, { error: quota.message, reason: quota.reason, retryAfterSec: quota.retryAfterSec });
+      }
+
       try {
         return send(res, 200, await chat(body.messages));
       } catch (err) {
         if (err instanceof MissingKeyError) return send(res, 500, { error: err.message });
         if (err instanceof MistralError) {
           console.error(`Mistral API error ${err.statusCode}`);
-          return send(res, 502, { error: `Mistral API error (${err.statusCode})` });
+          // Temporary errors were already retried with backoff; show a human message instead of a code.
+          const busy = err.statusCode === 429 || err.statusCode >= 500;
+          return send(res, 502, {
+            error: busy ? "The AI service is busy right now. Please try again in a minute." : `AI service error (${err.statusCode}).`,
+          });
         }
         throw err;
       }
@@ -108,8 +120,13 @@ const server = createServer(async (req, res) => {
   }
 });
 
-server.listen(PORT, () => {
-  console.log(`DATAAPP running on http://localhost:${PORT}`);
+// Default: only reachable from this computer. Set HOST=0.0.0.0 when hosting the backend for the mobile app.
+const HOST = process.env.HOST?.trim() || "127.0.0.1";
+
+server.listen(PORT, HOST, () => {
+  console.log(`DATAAPP running on http://${HOST === "127.0.0.1" ? "localhost" : HOST}:${PORT}`);
+  const l = limitsInfo();
+  console.log(`Limits: ${l.perMinute}/min and ${l.perDay}/day per user, ${l.globalPerDay}/day in total${l.trustProxy ? " (behind proxy)" : ""}`);
   if (!process.env.MISTRAL_API_KEY) console.warn("Warning: MISTRAL_API_KEY is not set (see .env.example)");
   prewarmNomis(); // the Nomis dataset list takes ~8 s to download; fetch it before the first UK question
 });

@@ -71,7 +71,15 @@ let client: Mistral | null = null;
 function getClient(): Mistral {
   const apiKey = process.env.MISTRAL_API_KEY;
   if (!apiKey) throw new MissingKeyError();
-  client ??= new Mistral({ apiKey });
+  // Retry temporary errors (429, 500, 502, 503, 504, connection drops) with exponential backoff, up to ~20 s in total.
+  client ??= new Mistral({
+    apiKey,
+    retryConfig: {
+      strategy: "backoff",
+      backoff: { initialInterval: 800, maxInterval: 6000, exponent: 2, maxElapsedTime: 20_000 },
+      retryConnectionErrors: true,
+    },
+  });
   return client;
 }
 

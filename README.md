@@ -46,6 +46,23 @@ Example questions:
 - The browser only talks to `/api/chat`. The key is never sent to the client or written to the logs.
   Errors from Mistral come back as a generic `502` with the status code only.
 
+## Usage limits and hosting (iOS / Android app backend)
+
+The app is meant to become an iOS/Android app. The mobile app talks to this server, which holds the API keys,
+so the server must be protected once it's on the internet:
+
+- **Network:** by default the server listens only on `127.0.0.1`, this computer. Set `HOST=0.0.0.0` when hosting it.
+  Behind a hosting proxy or load balancer, also set `TRUST_PROXY=1` so users are identified by `X-Forwarded-For`.
+- **Limits on `POST /api/chat`:** `CHAT_LIMIT_PER_MINUTE` (default 6) and `CHAT_LIMIT_PER_DAY` (60) per user, plus
+  `CHAT_LIMIT_GLOBAL_DAY` (2000) across all users as a hard cap on the Mistral bill. Over the limit, the server answers
+  `429` with `Retry-After` and a readable message. The counters are kept in memory, which is fine for one server.
+  With several servers, move them to a shared store such as Redis.
+- **Retries:** temporary Mistral errors (429 and 5xx, connection drops) are retried with exponential backoff for up to
+  about 20 seconds. If it still fails, the user sees "The AI service is busy right now" instead of an error code.
+
+Still to do before going to the stores: host the server (with HTTPS), point the app at its URL, wrap the UI with
+Capacitor (or a similar tool) for iOS and Android, and add a privacy policy. Questions are sent to Mistral (EU).
+
 ## Data sources
 
 | | Statistics Sweden (SCB) | Statistics Norway (SSB) | Eurostat | Nomis (UK, ONS) |
