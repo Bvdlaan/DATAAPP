@@ -7,8 +7,8 @@ The model calls the statistics APIs as tools: it searches tables, reads their me
 to pick valid codes, then fetches the data.
 
 ```
-src/server.ts     node:http server: serves the UI + POST /api/chat
-src/chat.ts       Mistral chat with a tool-calling loop (SCB + SSB tools)
+src/server.ts     node:http server: serves the UI, POST /api/chat, GET /api/headline
+src/chat.ts       Mistral chat with a tool-calling loop (SCB + SSB + Eurostat tools)
 src/scb.ts        SCB PxWebApi v2 client  -> scb_search_tables, scb_get_table_metadata, scb_get_data
 src/ssb.ts        SSB PxWebApi v0 client  -> ssb_search_tables, ssb_get_table_metadata, ssb_get_data
 src/eurostat.ts   Eurostat API client     -> eurostat_search_datasets, eurostat_get_dataset_metadata, eurostat_get_data
