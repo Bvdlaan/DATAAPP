@@ -5,6 +5,7 @@ import { MistralError } from "@mistralai/mistralai/models/errors";
 import { chat, MissingKeyError, type ChatTurn } from "./chat.js";
 import { getData as scbData } from "./scb.js";
 import { getData as ssbData } from "./ssb.js";
+import { prewarmNomis } from "./nomis.js";
 
 // Latest total population of Sweden (SCB TAB6473, monthly) and Norway (SSB 07459, yearly). Cached 1 hour.
 let headlineCache: { at: number; data: unknown } | null = null;
@@ -105,4 +106,5 @@ const server = createServer(async (req, res) => {
 server.listen(PORT, () => {
   console.log(`DATAAPP running on http://localhost:${PORT}`);
   if (!process.env.MISTRAL_API_KEY) console.warn("Warning: MISTRAL_API_KEY is not set (see .env.example)");
+  prewarmNomis(); // the Nomis dataset list takes ~8 s to download; fetch it before the first UK question
 });
