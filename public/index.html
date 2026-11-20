@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Nordic Stats Chat</title>
+  <style>
+    :root { --bg:#f7f7f5; --fg:#1d1d1b; --muted:#6b6b66; --card:#fff; --line:#e3e3de; --accent:#005293; --user:#e8f0f8; }
+    @media (prefers-color-scheme: dark) {
+      :root { --bg:#151514; --fg:#ececea; --muted:#9a9a94; --card:#1f1f1d; --line:#2e2e2b; --accent:#5aa6e8; --user:#1c2a38; }
+    }
+    * { box-sizing: border-box; }
+    body { margin:0; font:15px/1.5 system-ui, -apple-system, Segoe UI, sans-serif; background:var(--bg); color:var(--fg); }
+    main { max-width:760px; margin:0 auto; min-height:100vh; display:flex; flex-direction:column; padding:16px; }
+    header h1 { font-size:18px; margin:4px 0 2px; }
+    header p { margin:0 0 12px; color:var(--muted); font-size:13px; }
+    #log { flex:1; display:flex; flex-direction:column; gap:10px; padding:8px 0 16px; }
+    .msg { padding:10px 14px; border-radius:12px; max-width:88%; white-space:pre-wrap; word-wrap:break-word; border:1px solid var(--line); background:var(--card); }
+    .user { align-self:flex-end; background:var(--user); }
+    .meta { font-size:12px; color:var(--muted); margin-top:4px; }
+    .err { border-color:#c0392b; color:#c0392b; }
+    form { display:flex; gap:8px; position:sticky; bottom:0; background:var(--bg); padding:8px 0; }
+    textarea { flex:1; resize:none; font:inherit; padding:10px 12px; border-radius:10px; border:1px solid var(--line); background:var(--card); color:var(--fg); }
+    button { font:inherit; padding:0 18px; border:0; border-radius:10px; background:var(--accent); color:#fff; cursor:pointer; }
+    button:disabled { opacity:.5; cursor:default; }
+    .hint { font-size:13px; color:var(--muted); }
+    .hint button { background:none; color:var(--accent); padding:0; text-decoration:underline; }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Nordic Stats Chat</h1>
+    <p>Mistral (mistral-small-latest) with live data from Statistics Sweden (SCB) and Statistics Norway (SSB).</p>
+  </header>
+  <div id="log">
+    <div class="hint">Try: <button type="button" data-q="What was the population of Sweden in the latest month, by sex?">Population of Sweden by sex</button> · <button type="button" data-q="Compare the latest population of Norway and Sweden.">Norway vs Sweden population</button></div>
+  </div>
+  <form id="f">
+    <textarea id="q" rows="2" placeholder="Ask about Swedish or Norwegian statistics…" required></textarea>
+    <button id="send">Send</button>
+  </form>
+</main>
+<script>
+  const log = document.getElementById("log"), form = document.getElementById("f"), q = document.getElementById("q"), btn = document.getElementById("send");
+  const history = [];
+
+  function add(text, cls, meta) {
+    const el = document.createElement("div");
+    el.className = "msg " + cls;
+    el.textContent = text;
+    if (meta) { const m = document.createElement("div"); m.className = "meta"; m.textContent = meta; el.appendChild(m); }
+    log.appendChild(el);
+    el.scrollIntoView({ behavior: "smooth", block: "end" });
+    return el;
+  }
+
+  async function ask(text) {
+    history.push({ role: "user", content: text });
+    add(text, "user");
+    const pending = add("Thinking…", "bot");
+    btn.disabled = true;
+    try {
+      const r = await fetch("/api/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ messages: history.slice(-20) }) });
+      const data = await r.json();
+      pending.remove();
+      if (!r.ok) { history.pop(); add(data.error || "Request failed", "err"); return; }
+      history.push({ role: "assistant", content: data.reply });
+      add(data.reply, "bot", data.toolsUsed?.length ? "Data tools: " + data.toolsUsed.join(", ") : "");
+    } catch (e) {
+      pending.remove(); history.pop(); add("Network error: " + e.message, "err");
+    } finally { btn.disabled = false; q.focus(); }
+  }
+
+  form.addEventListener("submit", (e) => { e.preventDefault(); const t = q.value.trim(); if (!t) return; q.value = ""; ask(t); });
+  q.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); form.requestSubmit(); } });
+  log.addEventListener("click", (e) => { const b = e.target.closest("[data-q]"); if (b) ask(b.dataset.q); });
+</script>
+</body>
+</html>
