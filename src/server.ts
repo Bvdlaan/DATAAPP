@@ -3,6 +3,30 @@ import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { MistralError } from "@mistralai/mistralai/models/errors";
 import { chat, MissingKeyError, type ChatTurn } from "./chat.js";
+import { getData as scbData } from "./scb.js";
+import { getData as ssbData } from "./ssb.js";
+
+// Latest total population of Sweden (SCB TAB6473, monthly) and Norway (SSB 07459, yearly). Cached 1 hour.
+let headlineCache: { at: number; data: unknown } | null = null;
+async function headline() {
+  if (headlineCache && Date.now() - headlineCache.at < 3_600_000) return headlineCache.data;
+  const [se, no] = await Promise.all([
+    scbData("TAB6473", [
+      { variableCode: "Region", valueCodes: ["00"] },
+      { variableCode: "Kon", valueCodes: ["TotSa"] },
+      { variableCode: "Forandringar", valueCodes: ["100"] },
+    ]),
+    ssbData("07459", []),
+  ]);
+  const pick = (d: { rows: Record<string, unknown>[] }) => {
+    const row = d.rows[d.rows.length - 1];
+    const period = Object.entries(row).find(([k]) => /^(month|year|tid|år|måned)$/i.test(k))?.[1];
+    return { value: Number(row.value), period: String(period ?? "") };
+  };
+  const data = { sweden: pick(se), norway: pick(no) };
+  headlineCache = { at: Date.now(), data };
+  return data;
+}
 
 const PORT = Number(process.env.PORT ?? 3000);
 const INDEX = fileURLToPath(new URL("../public/index.html", import.meta.url));
@@ -39,6 +63,15 @@ const server = createServer(async (req, res) => {
       res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
       res.end(await readFile(INDEX));
       return;
+    }
+
+    if (req.method === "GET" && req.url === "/api/headline") {
+      try {
+        return send(res, 200, await headline());
+      } catch (err) {
+        console.error("headline:", err instanceof Error ? err.message : err);
+        return send(res, 502, { error: "Could not load headline data" });
+      }
     }
 
     if (req.method === "POST" && req.url === "/api/chat") {
