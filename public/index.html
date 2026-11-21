@@ -333,6 +333,16 @@
       <div class="body"><div class="head"><span class="title">Destatis</span><span class="time">Germany · GENESIS</span></div>
         <div class="text">German prices, jobs, population and more, incl. federal states. <span id="destatisStatus"></span></div></div>
     </div>
+    <div class="row">
+      <div class="who single"><svg class="flag"><use href="#flag-se"/></svg></div>
+      <div class="body"><div class="head"><span class="title">Sveriges Riksbank</span><span class="time">Sweden · central bank</span></div>
+        <div class="text">Policy rate, SWESTR, bond yields, SEK exchange rates and the Riksbank's forecasts</div></div>
+    </div>
+    <div class="row">
+      <div class="who single"><svg class="flag"><use href="#flag-no"/></svg></div>
+      <div class="body"><div class="head"><span class="title">Norges Bank</span><span class="time">Norway · central bank</span></div>
+        <div class="text">Policy rate, NOWA, government bond yields and NOK exchange rates</div></div>
+    </div>
     <a class="see-all" href="about">All sources, licences &amp; privacy</a>
   </div>
 
@@ -409,12 +419,17 @@
     { prefix: "nomis_", flag: "uk", name: "UK", full: "Nomis (UK)" },
     { prefix: "ons_", flag: "uk", name: "UK", full: "ONS (UK)" },
     { prefix: "destatis_", flag: "de", name: "Germany", full: "Destatis (Germany)" },
+    { prefix: "riksbank_", flag: "se", name: "Riksbank", full: "Sveriges Riksbank" },
+    { prefix: "norgesbank_", flag: "no", name: "Norges Bank", full: "Norges Bank" },
   ];
   function whoFor(tools) {
     const hit = SOURCES.filter((s) => tools.some((t) => t.startsWith(s.prefix)));
-    // Nomis and ONS share the UK flag: show it once (keep the full name when only one UK source was used).
+    // Sources that share a flag (Nomis + ONS, SCB + Riksbank) show it once; the title still names each source.
     const used = hit.filter((s, i) => hit.findIndex((x) => x.flag === s.flag) === i);
-    if (used.length === 1 && hit.length > 1) return { icon: `<div class="who single">${flag(used[0].flag)}</div>`, title: "UK (ONS + Nomis)" };
+    if (used.length === 1 && hit.length > 1) {
+      const title = used[0].flag === "uk" ? "UK (ONS + Nomis)" : hit.map((s) => s.full).join(" + ");
+      return { icon: `<div class="who single">${flag(used[0].flag)}</div>`, title };
+    }
     if (used.length === 1) return { icon: `<div class="who single">${flag(used[0].flag)}</div>`, title: used[0].full };
     if (used.length === 2) return { icon: `<div class="who">${used.map((s) => flag(s.flag)).join("")}</div>`, title: used.map((s) => s.name).join(" + ") };
     if (used.length >= 3) return { icon: `<div class="who ${used.length === 3 ? "triple" : "quad"}">${used.slice(0, 4).map((s) => flag(s.flag)).join("")}</div>`, title: used.map((s) => s.name).join(" + ") };
@@ -440,6 +455,8 @@
     ons_search_datasets: "ONS search", ons_get_dataset_metadata: "ONS dataset", ons_get_data: "ONS data",
     ons_search_timeseries: "ONS series search", ons_get_timeseries: "ONS series",
     destatis_search_tables: "Destatis search", destatis_get_table_metadata: "Destatis table", destatis_get_data: "Destatis data",
+    riksbank_search_series: "Riksbank search", riksbank_get_rates: "Riksbank rates", riksbank_get_forecast: "Riksbank forecast",
+    norgesbank_get_structure: "Norges Bank dataset", norgesbank_get_data: "Norges Bank data",
   };
 
   // ---------- "Report a problem" under each answer (required for AI-generated content on Google Play) ----------

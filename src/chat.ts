@@ -6,12 +6,14 @@ import { eurostatTools, runEurostatTool } from "./eurostat.js";
 import { nomisTools, runNomisTool } from "./nomis.js";
 import { onsTools, runOnsTool } from "./ons.js";
 import { genesisTools, runGenesisTool, genesisEnabled } from "./genesis.js";
+import { riksbankTools, runRiksbankTool } from "./riksbank.js";
+import { norgesbankTools, runNorgesbankTool } from "./norgesbank.js";
 
 const MODEL = "mistral-small-latest";
 const MAX_TOOL_ROUNDS = 16;
 
 // Germany (Destatis) needs a personal API token; without it, German questions go to Eurostat.
-const tools = () => [...scbTools, ...ssbTools, ...eurostatTools, ...nomisTools, ...onsTools, ...(genesisEnabled() ? genesisTools : [])];
+const tools = () => [...scbTools, ...ssbTools, ...eurostatTools, ...nomisTools, ...onsTools, ...riksbankTools, ...norgesbankTools, ...(genesisEnabled() ? genesisTools : [])];
 const RUNNERS: [string, (name: string, args: any) => Promise<unknown>][] = [
   ["scb_", runScbTool],
   ["ssb_", runSsbTool],
@@ -19,6 +21,8 @@ const RUNNERS: [string, (name: string, args: any) => Promise<unknown>][] = [
   ["nomis_", runNomisTool],
   ["ons_", runOnsTool],
   ["destatis_", runGenesisTool],
+  ["riksbank_", runRiksbankTool],
+  ["norgesbank_", runNorgesbankTool],
 ];
 const runTool = (name: string, args: any) => {
   const runner = RUNNERS.find(([prefix]) => name.startsWith(prefix))?.[1];
@@ -29,9 +33,19 @@ const runTool = (name: string, args: any) => {
 const SYSTEM_PROMPT = `You are a helpful assistant with live access to official open data from
 Statistics Sweden (SCB, tools scb_*), Statistics Norway (SSB, tools ssb_*), Eurostat (tools eurostat_*)
 Nomis, the UK's official labour market and census statistics (tools nomis_*), and the UK Office for National
-Statistics API (tools ons_*).
+Statistics API (tools ons_*), Sveriges Riksbank, Sweden's central bank (tools riksbank_*), and
+Norges Bank, Norway's central bank (tools norgesbank_*).
 Which source to use:
 - Sweden only: SCB (most detailed, often more recent). Norway only: SSB.
+- Swedish interest rates (policy rate, SWESTR, treasury bills, government and mortgage bond yields), SEK exchange
+  rates, and international market rates/bond yields: Riksbank (riksbank_search_series, then riksbank_get_rates).
+  Policy rate = SECBREPOEFF, SWESTR = SWESTR, EUR/SEK = SEKEURPMI, USD/SEK = SEKUSDPMI.
+- What the Riksbank forecasts (inflation/CPIF, GDP, unemployment, the policy rate path): riksbank_get_forecast. Always
+  say these are Riksbank forecasts, from which policy round and publication date. Actual published Swedish statistics
+  still come from SCB.
+- Norwegian interest rates (policy rate, NOWA, government bond and treasury bill yields) and NOK exchange rates:
+  Norges Bank (norgesbank_get_data; use norgesbank_get_structure first if the key is not one of the known keys).
+  Norwegian published statistics (CPI, GDP, population) still come from SSB.
 - United Kingdom jobs, unemployment, claimants, earnings, population and Census, incl. local areas: Nomis.
 - United Kingdom headline economics (inflation, GDP growth, unemployment/employment rate): ONS time series first
   (ons_search_timeseries / ons_get_timeseries, e.g. L55O CPIH annual rate, D7G7 CPI annual rate, MGSX unemployment
