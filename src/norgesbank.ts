@@ -4,6 +4,8 @@
 // Key = dimension codes joined by "." in the flow's dimension order; "+" = several codes, empty = all.
 // Exchange rates are NOK per 1 or per 100 units of the foreign currency (attribute UNIT_MULT).
 
+import { flattenSdmx, sdmxDimensions } from "./sdmx.js";
+
 const ROOT = (process.env.NORGESBANK_API_BASE ?? "https://data.norges-bank.no/api").replace(/\/+$/, "");
 const MAX_OBS_PER_SERIES = 60;
 const MAX_SERIES = 30;
@@ -41,38 +43,15 @@ function checkFlow(flow: string) {
   return f;
 }
 
-const label = (v: any) => (v ? (v.name && v.name !== v.id ? `${v.id} (${v.name})` : v.id) : undefined);
-
-/** SDMX-JSON data message -> one readable object per series. */
+/** SDMX-JSON data message -> one readable object per series (dimension labels, attributes, unit, values). */
 function flatten(json: any, maxObs = MAX_OBS_PER_SERIES) {
-  const st = json?.data?.structure;
-  const ds = json?.data?.dataSets?.[0];
-  if (!st || !ds?.series) return { series: [] as any[], totalSeries: 0 };
-  const dims: any[] = st.dimensions?.series ?? [];
-  const attrs: any[] = st.attributes?.series ?? [];
-  const times: any[] = st.dimensions?.observation?.[0]?.values ?? [];
-
-  const series = Object.entries<any>(ds.series).map(([key, s]) => {
-    const idx = key.split(":").map(Number);
-    const codes = dims.map((d, i) => d.values[idx[i]]);
-    const out: Record<string, unknown> = {
-      key: codes.map((c) => c?.id).join("."),
-      ...Object.fromEntries(dims.map((d, i) => [d.id, label(codes[i])])),
-    };
-    (s.attributes ?? []).forEach((ai: number | null, i: number) => {
-      const a = attrs[i];
-      if (ai == null || !a) return;
-      const v = a.values?.[ai];
-      out[a.id] = v?.name ?? v?.id;
-    });
-    if (out.UNIT_MULT === "Hundreds") out.unit = `NOK per 100 ${codes[dims.findIndex((d) => d.id === "BASE_CUR")]?.id ?? "units"}`;
-    else if (out.UNIT_MULT === "Units" && dims.some((d) => d.id === "BASE_CUR")) out.unit = `NOK per 1 ${codes[dims.findIndex((d) => d.id === "BASE_CUR")]?.id}`;
-
-    const obs = Object.entries<any>(s.observations ?? {})
-      .map(([t, v]) => ({ period: times[Number(t)]?.id, value: v?.[0] == null ? null : Number(v[0]) }))
-      .sort((a, b) => String(a.period).localeCompare(String(b.period)));
-    out.observations = obs.slice(-maxObs);
-    if (obs.length > maxObs) out.note = `Showing the latest ${maxObs} of ${obs.length} values; ask for a shorter period or a lower frequency (M or A).`;
+  const all = flattenSdmx(json, { maxObs });
+  const series = all.map((s) => {
+    const out: Record<string, unknown> = { key: s.key, ...s.dimensions, ...s.attributes };
+    const cur = s.key.split(".")[Object.keys(s.dimensions).indexOf("BASE_CUR")];
+    if ("BASE_CUR" in s.dimensions && s.attributes.UNIT_MULT) out.unit = `NOK per ${s.attributes.UNIT_MULT === "Hundreds" ? 100 : 1} ${cur}`;
+    out.observations = s.observations;
+    if (s.totalObservations > maxObs) out.note = `Showing the latest ${maxObs} of ${s.totalObservations} values; ask for a shorter period or a lower frequency (M or A).`;
     return out;
   });
   return { series: series.slice(0, MAX_SERIES), totalSeries: series.length };
@@ -82,15 +61,14 @@ export async function getStructure(flow: string) {
   const f = checkFlow(flow);
   // The latest value of every series is small for these flows and shows which code combinations really exist.
   const json = await nbFetch(`/data/${f}/?format=sdmx-json&lastNObservations=1&locale=en`, 12 * 3600_000);
-  const st = json?.data?.structure;
-  if (!st) throw new Error(`No structure returned for ${f}.`);
-  const dims: any[] = st.dimensions?.series ?? [];
+  const dims = sdmxDimensions(json);
+  if (!dims.length) throw new Error(`No structure returned for ${f}.`);
   const { series, totalSeries } = flatten(json, 1);
   return {
     dataset: f,
     description: FLOWS[f],
     keyOrder: dims.map((d) => d.id).join("."),
-    dimensions: dims.map((d) => ({ id: d.id, name: d.name, codes: d.values.map(label) })),
+    dimensions: dims,
     seriesCount: totalSeries,
     exampleSeries: series.slice(0, 15).map((s) => ({ key: s.key, latest: (s.observations as any[])[0], ...(s.unit ? { unit: s.unit } : {}) })),
   };

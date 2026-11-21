@@ -343,6 +343,11 @@
       <div class="body"><div class="head"><span class="title">Norges Bank</span><span class="time">Norway · central bank</span></div>
         <div class="text">Policy rate, NOWA, government bond yields and NOK exchange rates</div></div>
     </div>
+    <div class="row">
+      <div class="who single"><svg class="flag"><use href="#flag-eu"/></svg></div>
+      <div class="body"><div class="head"><span class="title">European Central Bank</span><span class="time">Euro area · ECB Data Portal</span></div>
+        <div class="text">ECB interest rates, €STR, euro exchange rates, bond yields, M3, bank lending rates and forecaster surveys</div></div>
+    </div>
     <a class="see-all" href="about">All sources, licences &amp; privacy</a>
   </div>
 
@@ -421,6 +426,7 @@
     { prefix: "destatis_", flag: "de", name: "Germany", full: "Destatis (Germany)" },
     { prefix: "riksbank_", flag: "se", name: "Riksbank", full: "Sveriges Riksbank" },
     { prefix: "norgesbank_", flag: "no", name: "Norges Bank", full: "Norges Bank" },
+    { prefix: "ecb_", flag: "eu", name: "ECB", full: "European Central Bank" },
   ];
   function whoFor(tools) {
     const hit = SOURCES.filter((s) => tools.some((t) => t.startsWith(s.prefix)));
@@ -457,6 +463,7 @@
     destatis_search_tables: "Destatis search", destatis_get_table_metadata: "Destatis table", destatis_get_data: "Destatis data",
     riksbank_search_series: "Riksbank search", riksbank_get_rates: "Riksbank rates", riksbank_get_forecast: "Riksbank forecast",
     norgesbank_get_structure: "Norges Bank dataset", norgesbank_get_data: "Norges Bank data",
+    ecb_find_series: "ECB search", ecb_get_data: "ECB data",
   };
 
   // ---------- "Report a problem" under each answer (required for AI-generated content on Google Play) ----------

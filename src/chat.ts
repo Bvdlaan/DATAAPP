@@ -8,12 +8,13 @@ import { onsTools, runOnsTool } from "./ons.js";
 import { genesisTools, runGenesisTool, genesisEnabled } from "./genesis.js";
 import { riksbankTools, runRiksbankTool } from "./riksbank.js";
 import { norgesbankTools, runNorgesbankTool } from "./norgesbank.js";
+import { ecbTools, runEcbTool } from "./ecb.js";
 
 const MODEL = "mistral-small-latest";
 const MAX_TOOL_ROUNDS = 16;
 
 // Germany (Destatis) needs a personal API token; without it, German questions go to Eurostat.
-const tools = () => [...scbTools, ...ssbTools, ...eurostatTools, ...nomisTools, ...onsTools, ...riksbankTools, ...norgesbankTools, ...(genesisEnabled() ? genesisTools : [])];
+const tools = () => [...scbTools, ...ssbTools, ...eurostatTools, ...nomisTools, ...onsTools, ...riksbankTools, ...norgesbankTools, ...ecbTools, ...(genesisEnabled() ? genesisTools : [])];
 const RUNNERS: [string, (name: string, args: any) => Promise<unknown>][] = [
   ["scb_", runScbTool],
   ["ssb_", runSsbTool],
@@ -23,6 +24,7 @@ const RUNNERS: [string, (name: string, args: any) => Promise<unknown>][] = [
   ["destatis_", runGenesisTool],
   ["riksbank_", runRiksbankTool],
   ["norgesbank_", runNorgesbankTool],
+  ["ecb_", runEcbTool],
 ];
 const runTool = (name: string, args: any) => {
   const runner = RUNNERS.find(([prefix]) => name.startsWith(prefix))?.[1];
@@ -34,7 +36,7 @@ const SYSTEM_PROMPT = `You are a helpful assistant with live access to official 
 Statistics Sweden (SCB, tools scb_*), Statistics Norway (SSB, tools ssb_*), Eurostat (tools eurostat_*)
 Nomis, the UK's official labour market and census statistics (tools nomis_*), and the UK Office for National
 Statistics API (tools ons_*), Sveriges Riksbank, Sweden's central bank (tools riksbank_*), and
-Norges Bank, Norway's central bank (tools norgesbank_*).
+Norges Bank, Norway's central bank (tools norgesbank_*), and the European Central Bank (tools ecb_*).
 Which source to use:
 - Sweden only: SCB (most detailed, often more recent). Norway only: SSB.
 - Swedish interest rates (policy rate, SWESTR, treasury bills, government and mortgage bond yields), SEK exchange
@@ -46,6 +48,13 @@ Which source to use:
 - Norwegian interest rates (policy rate, NOWA, government bond and treasury bill yields) and NOK exchange rates:
   Norges Bank (norgesbank_get_data; use norgesbank_get_structure first if the key is not one of the known keys).
   Norwegian published statistics (CPI, GDP, population) still come from SSB.
+- ECB key interest rates (deposit facility, main refinancing, marginal lending), €STR, euro reference exchange rates,
+  euro area government bond yields, 10-year yields per EU country, money supply (M3), bank lending rates and the
+  Survey of Professional Forecasters: ECB (ecb_get_data with a known key; ecb_find_series to explore keys).
+  Euro area inflation (HICP): ECB dataset HICP or Eurostat; both carry Eurostat's figures.
+  ECB key rates are dated on the day a change took effect: say "since <date>", not "on <date>".
+  A country's 10-year government bond yield (e.g. the German Bund) = ECB dataset IRS (monthly average; say so). The
+  ECB yield curve YC is a euro area curve, never a single country's yield.
 - United Kingdom jobs, unemployment, claimants, earnings, population and Census, incl. local areas: Nomis.
 - United Kingdom headline economics (inflation, GDP growth, unemployment/employment rate): ONS time series first
   (ons_search_timeseries / ons_get_timeseries, e.g. L55O CPIH annual rate, D7G7 CPI annual rate, MGSX unemployment
@@ -59,7 +68,9 @@ Which source to use:
   definitions are harmonised so figures are comparable. Eurostat also covers Sweden and Norway (geo codes SE, NO).
 - Comparing the UK with other countries: use Nomis for the UK and Eurostat for the rest, and mention that
   definitions or periods may differ slightly.
-Workflow: search, inspect metadata to choose valid codes, then fetch data.
+If the user names a source (e.g. "according to the ECB"), use that source.
+Workflow: search, inspect metadata to choose valid codes, then fetch data. Answer every part of the question; if one
+part could not be found, say so.
 Every number you state must come from a tool result in this conversation. Never use figures from your own
 knowledge; if the data can't be found, say so plainly instead of estimating. (The app promises users that all data comes
 from official databases.)

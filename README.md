@@ -1,14 +1,14 @@
 # Stats Genius (DATAAPP)
 
 A minimal web chat that answers questions with **live official statistics** from
-**Statistics Sweden (SCB)**, **Statistics Norway (SSB)**, **Eurostat**, the UK's **Nomis** and **ONS** APIs, Germany's **Destatis** (GENESIS-Online), and the central banks of Sweden (**Sveriges Riksbank**) and Norway (**Norges Bank**), using Mistral's
+**Statistics Sweden (SCB)**, **Statistics Norway (SSB)**, **Eurostat**, the UK's **Nomis** and **ONS** APIs, Germany's **Destatis** (GENESIS-Online), and the central banks of Sweden (**Sveriges Riksbank**) and Norway (**Norges Bank**), and the **European Central Bank**, using Mistral's
 `mistral-small-latest` through the official TypeScript SDK (`@mistralai/mistralai`).
 The model calls the statistics APIs as tools: it searches tables, reads their metadata
 to pick valid codes, then fetches the data.
 
 ```
 src/server.ts     node:http server: serves the UI, POST /api/chat, GET /api/headline
-src/chat.ts       Mistral chat with a tool-calling loop (SCB + SSB + Eurostat + Nomis + ONS + Destatis + Riksbank + Norges Bank tools)
+src/chat.ts       Mistral chat with a tool-calling loop (SCB + SSB + Eurostat + Nomis + ONS + Destatis + Riksbank + Norges Bank + ECB tools)
 src/scb.ts        SCB PxWebApi v2 client  -> scb_search_tables, scb_get_table_metadata, scb_get_data
 src/ssb.ts        SSB PxWebApi v0 client  -> ssb_search_tables, ssb_get_table_metadata, ssb_get_data
 src/eurostat.ts   Eurostat API client     -> eurostat_search_datasets, eurostat_get_dataset_metadata, eurostat_get_data
@@ -17,6 +17,8 @@ src/ons.ts        ONS beta API client     -> ons_search_timeseries, ons_get_time
 src/genesis.ts    Destatis GENESIS client -> destatis_search_tables, destatis_get_table_metadata, destatis_get_data
 src/riksbank.ts   Riksbank SWEA + SWESTR + Monetary Policy Data -> riksbank_search_series, riksbank_get_rates, riksbank_get_forecast
 src/norgesbank.ts Norges Bank SDMX REST client -> norgesbank_get_structure, norgesbank_get_data
+src/ecb.ts        ECB Data Portal SDMX REST client -> ecb_find_series, ecb_get_data
+src/sdmx.ts       SDMX-JSON -> readable series (shared by Norges Bank and ECB)
 src/jsonstat.ts   JSON-stat2 -> readable rows (shared by all sources)
 public/index.html Dependency-free chat UI
 ```
@@ -42,6 +44,7 @@ Example questions:
 - "How many people claim unemployment benefits in Manchester and London, compared with a year ago?"
 - "What is the Riksbank's policy rate, and what does the Riksbank expect for CPIF inflation next year?"
 - "Compare the policy rates and 10-year government bond yields of Sweden and Norway."
+- "What is the ECB deposit rate, and what do professional forecasters expect for euro area inflation in 2027?"
 
 ## Keeping the API key safe
 
@@ -185,6 +188,29 @@ The key is the dimension codes in the dataset's order joined by `.`, with `+` fo
 The tools also offer `GOVT_KEYFIGURES`, `FINANCIAL_INDICATORS` and `REGNET`. Large transaction-level datasets
 (`MONEY_MARKET`, `GOVT_IRS`, `CBC_*`) are left out. Some exchange rates are quoted per 100 units (e.g. SEK, DKK, JPY:
 attribute `UNIT_MULT` = Hundreds); the tool returns this as `unit`, e.g. "NOK per 100 SEK". Credit: "Source: Norges Bank".
+
+### Euro area: European Central Bank (no key)
+
+The [ECB Data Portal](https://data.ecb.europa.eu) API is SDMX REST 2.1 at `https://data-api.ecb.europa.eu/service/`
+([overview](https://data.ecb.europa.eu/help/api/overview)). Data: `GET /data/{dataset}/{key}?format=jsondata` plus
+`startPeriod`, `endPeriod` or `lastNObservations`. The key syntax is the same as Norges Bank's (`.`, `+`, empty = all).
+Structure queries (`/dataflow`, `/datastructure`) only return XML, so `src/ecb.ts` lists the main datasets with their key
+order, and `ecb_find_series` shows the key order and codes for any wildcard key (with each series' latest value).
+
+| Dataset | Example key | What |
+|---|---|---|
+| `FM` | `B.U2.EUR.4F.KR.DFR.LEV` | Deposit facility rate (`MRR_FR` main refinancing, `MLFR` marginal lending), dated on the day of change |
+| `EST` | `B.EU000A2X2A25.WT` | €STR |
+| `EXR` | `D.USD+GBP.EUR.SP00.A` | Euro reference rates, units of foreign currency per EUR; `M` = monthly average |
+| `HICP` | `M.U2.N.000000.4D0.ANR` | Inflation, euro area (`U2`) or a country (`DE`, `FR`...) |
+| `YC` | `B.U2.EUR.4F.G_N_A.SV_C_YM.SR_10Y` | AAA euro area government yield curve, 10-year spot rate |
+| `IRS` | `M.DE+FR+IT.L.L40.CI.0000.EUR.N.Z` | 10-year government bond yields per EU country |
+| `BSI` | `M.U2.Y.V.M30.X.I.U2.2300.Z01.A` | M3 annual growth |
+| `MIR` | `M.U2.B.A2C.AM.R.A.2250.EUR.N` | Cost of borrowing for house purchase |
+| `SPF` | `Q.U2.HICP.POINT.2027.Q.AVG` | Survey of Professional Forecasters, average HICP forecast for 2027 |
+
+Note: the old `ICP` dataset stops at December 2025. Current HICP figures are in `HICP`, with data provider `4D0`.
+Responses over 6 MB are refused, so very broad keys ask the model to narrow them. Credit: "Source: ECB Data Portal".
 
 The PxTools [installation guide](https://www.pxtools.net/PxWebApi/documentation/installation/)
 covers self-hosting PxWebApi on IIS. This app doesn't need that, because it calls the hosted APIs.
